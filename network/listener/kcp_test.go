@@ -1,5 +1,73 @@
 package listener
 
+import (
+	"errors"
+	"net"
+	"testing"
+	"time"
+
+	"github.com/XiaWuSharve/whisperly/datas"
+	"github.com/XiaWuSharve/whisperly/network/conn"
+	"github.com/bwmarrin/snowflake"
+	"github.com/xtaci/kcp-go/v5"
+)
+
+func TestKcp(t *testing.T) {
+	node, err := snowflake.NewNode(0)
+	if err != nil {
+		panic(err)
+	}
+	datas.Ids = node
+
+	listener, err := kcp.Listen("0.0.0.0:3001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	lis := &KcpListener{Listener: listener}
+	connChan := make(chan conn.Conn, 10)
+	go func() {
+		defer lis.Close()
+		if err := lis.Listen(connChan); err != nil {
+			if !errors.Is(err, net.ErrClosed) {
+				t.Fatal(err)
+			}
+		}
+	}()
+	sess, err := kcp.Dial("127.0.0.1:3001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.Close()
+	n, err := sess.Write([]byte("hello server"))
+	if n != 12 {
+		t.Fatal(err)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	bytes := make([]byte, 12)
+	select {
+	case conn := <-connChan:
+		id := conn.GetId()
+		if id == 0 {
+			t.Fatal(id == 0)
+		}
+		n, err := conn.GetReader().Read(bytes)
+		if n != 12 {
+			t.Fatal(n)
+		}
+		if string(bytes) != "hello server" {
+			t.Fatal(string(bytes))
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("time.After(5 * time.Second)")
+	}
+}
+
 // func TestKCP(t *testing.T) {
 // 	listener, err := kcp.Listen("0.0.0.0:3001")
 // 	if err != nil {

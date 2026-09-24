@@ -19,6 +19,7 @@ type SyncStore struct {
 }
 
 type MyAdapter struct {
+	MaxHeaderSize int
 }
 
 const (
@@ -32,7 +33,8 @@ func (m *MyAdapter) Marshal(msg timeline.Message) (*timeline.ColumnMap, error) {
 		return nil, timeline.ErrUnexpected
 	}
 	col := timeline.NewColumnMap()
-	col.AddBytesColumn(PAYLOAD, store.Payload)
+	payload := store.ToByte()
+	col.AddBytesColumn(PAYLOAD, payload.Bytes[payload.BodyStartIdx:])
 	return col, nil
 }
 
@@ -53,9 +55,15 @@ func (m *MyAdapter) Unmarshal(cols *timeline.ColumnMap) (timeline.Message, error
 	if !ok {
 		return nil, ErrPayloadNotFound
 	}
-	store := &datas.Store{
-		Payload: v.([]byte),
-	}
+	store := &datas.Store{}
+	body := v.([]byte)
+	// TODO 可能可以封装？
+	bytes := make([]byte, len(body)+m.MaxHeaderSize)
+	copy(bytes[m.MaxHeaderSize:], body)
+	store.Parse(&datas.Payload{
+		Bytes:        bytes,
+		BodyStartIdx: m.MaxHeaderSize,
+	})
 
 	return store, nil
 }

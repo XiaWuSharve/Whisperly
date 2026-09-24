@@ -1,21 +1,32 @@
 package datas
 
 type Send struct {
-	ReceiverId string
-	AckStatus  AckStatus
-	MessageId  int64
-	ConnId     int64
-	Payload    []byte
+	Payload
+	Type        MessageType
+	CreatedTime int64
+	Ack         *Ack
+	ReceiverId  string // 换成发送者Id不挺好？
+	MessageId   int64
+	Sequence    int64
+	ConnId      int64 // deprecated?
 }
 
-// GetRequiredBufLen implements [Encodable].
-func (s *Send) GetRequiredBufLen() int {
+// Parse implements [Decodable].
+func (s *Send) Parse(d *Payload) error {
 	panic("unimplemented")
 }
 
 // ToByte implements [Encodable].
-func (s *Send) ToByte() []byte {
-	panic("unimplemented")
+func (s *Send) ToByte() *Payload {
+	if s.Type == MessageType_NORMAL {
+
+	}
+	return &s.Payload
+}
+
+func (s *Send) FromStore(store *Store) {
+	s.Parse(&store.Payload)
 }
 
 var _ Encodable = (*Send)(nil)
+var _ Decodable = (*Send)(nil)

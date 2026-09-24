@@ -1,22 +1,20 @@
 package router
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"log/slog"
 
-	"github.com/XiaWuSharve/whisperly/client"
 	"github.com/XiaWuSharve/whisperly/datas"
 	"github.com/XiaWuSharve/whisperly/mq"
+	"github.com/XiaWuSharve/whisperly/network/conn"
 )
 
 type Router struct {
-	consumer      mq.Consumer[*datas.Send]
-	pool          *client.ConnPool
-	Err           error
-	storeProducer mq.Producer
-	send2cache    datas.Converter[*datas.Send, *datas.Cache]
+	SendConsumer  mq.Consumer[*datas.Send]
+	Pool          *conn.Pool
+	StoreProducer mq.Producer
+	Send2store    datas.Converter[*datas.Send, *datas.Store]
 }
 
 var _ mq.Handler[*datas.Send] = (*Router)(nil)
@@ -24,32 +22,32 @@ var _ mq.Handler[*datas.Send] = (*Router)(nil)
 var ErrConnNotFound = errors.New("conn not exist")
 
 func (r *Router) Start() error {
-	return r.consumer.Start(r)
+	return r.SendConsumer.Start(r)
 }
 
-var ErrWaitingRetry = errors.New("send channel is full")
+// var ErrWaitingRetry = errors.New("send channel is full")
 
-func (r *Router) Handle(frame *datas.Send) error {
-	conn, ok := r.pool.Conns.Get(frame.ConnId)
+func (r *Router) Handle(d *datas.Send) error {
+	handler, ok := r.Pool.Get(d.ReceiverId)
 	if !ok {
-		cacheData, err := r.send2cache.Convert(frame)
+		storeData, err := r.Send2store.Convert(d)
 		if err != nil {
-			slog.Error("failed to convert send to cache data", "err", err)
-			return nil
+			return fmt.Errorf("failed to convert send to store data: %w", err)
 		}
-		if _, err := r.storeProducer.Enqueue(cacheData); err != nil {
+		if _, err := r.StoreProducer.Enqueue(storeData); err != nil {
 			return fmt.Errorf("cannot enqueue store producer: %w", err)
 		}
+		return nil
 	}
+	// r.HeaderBytes[0] = byte(frame.AckStatus)
+	// binary.BigEndian.PutUint64(r.HeaderBytes[1:9], uint64(frame.ConnId))
+	// binary.BigEndian.PutUint32(r.HeaderBytes[9:13], uint32(len(frame.Payload)))
+	slog.Debug("client sending frame")
 
-	r.HeaderBytes[0] = byte(frame.AckStatus)
-	binary.BigEndian.PutUint64(r.HeaderBytes[1:9], uint64(frame.ConnId))
-	binary.BigEndian.PutUint32(r.HeaderBytes[9:13], uint32(len(frame.Payload)))
-	slog.Debug("client sending kcp frame")
 	select {
-	case conn.GetSendChan() <- append(r.HeaderBytes[0:13], frame.Payload...):
+	case handler.SendChan <- d:
 	default:
-		return ErrWaitingRetry
+		return mq.ErrRequeue
 	}
 
 	return nil

@@ -26,6 +26,7 @@ type ServerConfig struct {
 	WriteBufferSize int    `mapstructure:"write-buffer-size"`
 	TimeTolerance   int64  `mapstructure:"time-tolerance"`
 	NodeId          int64  `mapstructure:"node-id"`
+	ConnBufSize     int    `mapstructure:"conn-buf-size"`
 }
 
 type MqConfig struct {
@@ -92,12 +93,13 @@ func Init(cmd *cobra.Command) {
 	cmd.PersistentFlags().Int("read-buffer-size", Server.ReadBufferSize, "read buffer size")
 	cmd.PersistentFlags().Int("write-buffer-size", Server.WriteBufferSize, "write buffer size")
 	cmd.PersistentFlags().Int64("time-tolerance", Server.TimeTolerance, "time tolerance in seconds")
+	cmd.PersistentFlags().Int64("node-id", Server.NodeId, "node id")
+	cmd.PersistentFlags().Int("conn-buf-size", Server.ConnBufSize, "queue connecting buffer size")
 	cmd.PersistentFlags().StringSlice("nsqd-address", Mq.NsqdAddress, "nsqd address list")
 	cmd.PersistentFlags().String("nsqlookupd-address", Mq.NsqlookupdAddress, "nsqlookupd address")
 	cmd.PersistentFlags().Int("receiver-num", Component.ReceiverNum, "receiver num")
 	cmd.PersistentFlags().Int("sender-num", Component.SenderNum, "sender num")
 	cmd.PersistentFlags().Int("processor-num", Component.ProcessorNum, "processor num")
-	cmd.PersistentFlags().Int64("node-id", Server.NodeId, "node id")
 	cmd.PersistentFlags().String("endpoint", Tablestore.Endpoint, "endpoint")
 	cmd.PersistentFlags().String("instance", Tablestore.Instance, "instance")
 	cmd.PersistentFlags().String("ak-id", Tablestore.AkId, "ak id")
@@ -109,12 +111,13 @@ func Init(cmd *cobra.Command) {
 	viper.BindPFlag("server.read-buffer-size", cmd.Flags().Lookup("read-buffer-size"))
 	viper.BindPFlag("server.write-buffer-size", cmd.Flags().Lookup("write-buffer-size"))
 	viper.BindPFlag("server.time-tolerance", cmd.Flags().Lookup("time-tolerance"))
+	viper.BindPFlag("server.node-id", cmd.Flags().Lookup("node-id"))
+	viper.BindPFlag("server.conn-buf-size", cmd.Flags().Lookup("conn-buf-size"))
 	viper.BindPFlag("mq.nsqd-address", cmd.Flags().Lookup("nsqd-address"))
 	viper.BindPFlag("mq.nsqlookupd-address", cmd.Flags().Lookup("nsqlookupd-address"))
 	viper.BindPFlag("component.receiver-num", cmd.Flags().Lookup("receiver-num"))
 	viper.BindPFlag("component.sender-num", cmd.Flags().Lookup("sender-num"))
 	viper.BindPFlag("component.processor-num", cmd.Flags().Lookup("processor-num"))
-	viper.BindPFlag("server.node-id", cmd.Flags().Lookup("node-id"))
 	viper.BindPFlag("tablestore.endpoint", cmd.Flags().Lookup("endpoint"))
 	viper.BindPFlag("tablestore.instance", cmd.Flags().Lookup("instance"))
 	viper.BindPFlag("tablestore.ak-id", cmd.Flags().Lookup("ak-id"))

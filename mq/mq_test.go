@@ -6,6 +6,7 @@ import (
 
 	"github.com/XiaWuSharve/whisperly/datas"
 	"github.com/bwmarrin/snowflake"
+	"github.com/nsqio/go-nsq"
 )
 
 type TestHandler struct {
@@ -74,9 +75,10 @@ func TestMq(t *testing.T) {
 		panic(err)
 	}
 	datas.Ids = node
-	mq, err := NewMq("test", &datas.MessageDecoder{})
-	if err != nil {
-		t.Fatal(err)
+	mq := &Mq[*datas.MMessage]{
+		Config:  nsq.NewConfig(),
+		Topic:   "test",
+		Decoder: &datas.MMessage{},
 	}
 	producer, err := mq.CreateProducer("localhost:4150")
 	if err != nil {
@@ -121,7 +123,7 @@ func TestMq(t *testing.T) {
 		t.Fatal("no message consumed")
 	}
 	defer func() {
-		doneChan := consumer.Stop()
+		doneChan := consumer.Close()
 		<-doneChan
 	}()
 }
