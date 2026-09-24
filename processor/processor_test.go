@@ -24,8 +24,8 @@ func (h *handler) Handle(s *datas.Send) error {
 		if s.ReceiverId != "sharve" {
 			h.T.Fatal("s.ReceiverId != sharve: ", s.ReceiverId)
 		}
-		if s.AckStatus != datas.AckStatus_SENT {
-			h.T.Fatal(s.AckStatus)
+		if s.Ack.Status != datas.AckStatus_SENT {
+			h.T.Fatal(s.Ack)
 		}
 		if s.MessageId != messId {
 			h.T.Fatal(s.MessageId)
@@ -46,7 +46,7 @@ func (h *handler) Handle(s *datas.Send) error {
 		if s.ConnId != messId {
 			h.T.Fatal(s.ConnId)
 		}
-		if len(s.Payload) == 0 {
+		if len(s.Payload.Bytes) == 0 {
 			h.T.Fatal("len(s.Payload) == 0")
 		}
 		f = true
@@ -83,7 +83,7 @@ func TestProcessor(t *testing.T) {
 		ReceiverId:  "processor",
 		SenderId:    "sharve",
 		MessageId:   messId,
-		Payload: (&datas.MMessage{Message: datas.Message{
+		Payload: *(&datas.MMessage{Message: datas.Message{
 			ConnId: messId,
 			Type2: &datas.Message_Normal{
 				Normal: datas.NormalType_CHAT,

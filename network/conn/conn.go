@@ -10,6 +10,7 @@ import (
 )
 
 type Conn interface {
+	// TODO deprecated?
 	GetId() int64
 	GetReader() io.Reader
 	Send(data []byte) error
@@ -73,3 +74,32 @@ func (c *WsConn) Send(data []byte) error {
 func (c *WsConn) GetId() int64 {
 	return c.Id
 }
+
+type MockConn struct {
+	Id     int64
+	Reader io.Reader
+	Output []byte
+}
+
+// Close implements [Conn].
+func (m *MockConn) Close() error {
+	return nil
+}
+
+// GetId implements [Conn].
+func (m *MockConn) GetId() int64 {
+	return m.Id
+}
+
+// GetReader implements [Conn].
+func (m *MockConn) GetReader() io.Reader {
+	return m.Reader
+}
+
+// Send implements [Conn].
+func (m *MockConn) Send(data []byte) error {
+	m.Output = data
+	return nil
+}
+
+var _ Conn = (*MockConn)(nil)

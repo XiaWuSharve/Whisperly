@@ -16,10 +16,22 @@ type Pool = utils.ShardMap[string, *SendHandler]
 
 type Client struct {
 	Conn
-	StoreProducer  *mq.Producer
-	sendHandler    *SendHandler
-	receiveHandler *ReceiveHandler
+	StoreProducer  mq.ProducerInt
+	SendHandler    *SendHandler
+	ReceiveHandler *ReceiveHandler
 	Pool           *Pool
+}
+
+type ReceiveHandler struct {
+	Client
+	ProcessProducer mq.ProducerInt
+	receiveData     *datas.Receive
+	StreamDecoder   datas.ReceiveStreamDecoder
+	storeData       datas.Store
+	// to self sendHandler channel
+	ok       bool
+	sendData datas.Send
+	Err      error
 }
 
 type SendHandler struct {
@@ -28,9 +40,9 @@ type SendHandler struct {
 	SendChan     chan *datas.Send
 	sendData     *datas.Send
 	storeData    *datas.Store
-	SendConsumer mq.Consumer[*datas.Send]
-	routed2store datas.Converter[*datas.Send, *datas.Store]
+	SendConsumer mq.ConsumerInt[*datas.Send]
 	id           *string
+	payload      *datas.Payload
 }
 
 // Handle implements [mq.Handler].
@@ -43,13 +55,9 @@ var _ mq.Handler[*datas.Send] = (*SendHandler)(nil)
 
 func (s *SendHandler) close() {
 	close(s.SendChan)
-	var err error
 	for s.sendData = range s.SendChan {
-		s.storeData, err = s.routed2store.Convert(s.sendData)
-		if err != nil {
-			slog.Error("failed to conver routed send to cache: %w", "err", err)
-		}
-		_, err = s.StoreProducer.Enqueue(s.storeData)
+		s.storeData.FromSend(s.sendData)
+		_, err := s.StoreProducer.Enqueue(s.storeData)
 		if err != nil {
 			slog.Error("failed to enqueue store mq", "err", err)
 		}
@@ -63,7 +71,9 @@ func (s *SendHandler) Start() error {
 	}
 	defer s.SendConsumer.Close()
 	for s.sendData = range s.SendChan {
-		if s.Err = s.Send(s.sendData.ToByte()); s.Err != nil {
+		// TODO 需要加一个ToByte接口（这个改为ToPayload）
+		s.payload = s.sendData.ToByte()
+		if s.Err = s.Send(s.payload.Bytes[s.payload.BodyStartIdx:]); s.Err != nil {
 			if errors.Is(s.Err, net.ErrClosed) {
 				return s.Err
 			}
@@ -73,49 +83,36 @@ func (s *SendHandler) Start() error {
 	return nil
 }
 
-type ReceiveHandler struct {
-	Client
-	ProcessProducer *mq.Producer
-	receiveData     *datas.Receive
-	streamDecoder   datas.ReceiveStreamDecoder
-	receive2store   datas.Converter[*datas.Receive, *datas.Store]
-	storeData       *datas.Store
-	// to self sendHandler channel
-	ok       bool
-	sendData datas.Send
-	Err      error
-}
-
 var ErrIdNotFound = errors.New("id not found, try adding first")
 
 func (r *ReceiveHandler) Start() error {
-	defer close(r.sendHandler.SendChan)
+	defer close(r.SendHandler.SendChan)
 	// 只处理与业务无关的连接相关的逻辑
 	reader := bufio.NewReader(r.GetReader())
 	for {
-		r.receiveData, r.Err = r.streamDecoder.Parse(reader)
+		r.receiveData, r.Err = r.StreamDecoder.Parse(reader)
 		if r.Err != nil {
 			if errors.Is(r.Err, net.ErrClosed) {
 				return r.Err
 			} else if errors.Is(r.Err, datas.ErrTimeLargeOffset) {
 				// send fail ACK
-				r.ackFail()
+				r.ackFail(fmt.Sprintf("数据格式转换失败：%s", r.Err))
 				slog.Error(r.Err.Error())
 				continue
 			} else {
 				return fmt.Errorf("failed to handle receive: %w", r.Err)
 			}
 		}
-		if r.sendHandler.id == nil {
-			r.sendHandler.id = &r.receiveData.SenderId
-			r.Pool.Set(*r.sendHandler.id, r.sendHandler)
-		} else if *r.sendHandler.id != r.receiveData.SenderId {
+		if r.SendHandler.id == nil {
+			r.SendHandler.id = &r.receiveData.SenderId
+			r.Pool.Set(*r.SendHandler.id, r.SendHandler)
+		} else if *r.SendHandler.id != r.receiveData.SenderId {
 			handler, ok := r.Pool.Get(r.receiveData.SenderId)
 			if !ok {
 				return ErrIdNotFound
 			}
 			r.Pool.Set(r.receiveData.SenderId, handler)
-			r.Pool.Delete(*r.sendHandler.id)
+			r.Pool.Delete(*r.SendHandler.id)
 		}
 		// 消息类型：normal/pull(ack sequence+pull count)
 		switch r.receiveData.Type {
@@ -136,29 +133,36 @@ func (r *ReceiveHandler) Start() error {
 	}
 }
 
-func (r *ReceiveHandler) ackFail() {
-	r.sendData.AckStatus = datas.AckStatus_FAIL
+func (r *ReceiveHandler) ackFail(reason string) {
+	r.sendData.Type = datas.MessageType_ACK
+	r.sendData.Ack = &datas.Ack{
+		Reason: reason,
+		Status: datas.AckStatus_FAIL,
+	}
 	r.sendData.MessageId = r.receiveData.MessageId
 	// TODO reason bit
-	r.sendHandler.SendChan <- &r.sendData
+	r.SendHandler.SendChan <- &r.sendData
 }
 
 func (r *ReceiveHandler) ackSending() {
-	r.sendData.AckStatus = datas.AckStatus_SENDING
+	r.sendData.Type = datas.MessageType_ACK
+	r.sendData.Ack = &datas.Ack{
+		Status: datas.AckStatus_SENDING,
+	}
 	r.sendData.MessageId = r.receiveData.MessageId
 	// TODO reason bit
-	r.sendHandler.SendChan <- &r.sendData
+	r.SendHandler.SendChan <- &r.sendData
 }
 
 func (r *ReceiveHandler) toStore() {
-	r.storeData, r.Err = r.receive2store.Convert(r.receiveData)
+	r.storeData.FromReceive(r.receiveData)
 	if r.Err != nil {
-		r.ackFail()
+		r.ackFail(fmt.Sprintf("数据格式转换失败：%s", r.Err))
 		return
 	}
-	_, r.Err = r.StoreProducer.Enqueue(r.storeData)
+	_, r.Err = r.StoreProducer.Enqueue(&r.storeData)
 	if r.Err != nil {
-		r.ackFail()
+		r.ackFail(fmt.Sprintf("无法暂存数据：%s", r.Err))
 		return
 	}
 }

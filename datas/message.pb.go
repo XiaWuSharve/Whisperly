@@ -263,6 +263,7 @@ type Message struct {
 	CreatedTime int64                  `protobuf:"varint,4,opt,name=created_time,json=createdTime,proto3" json:"created_time,omitempty"`
 	ConnId      int64                  `protobuf:"varint,12,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
 	MessageId   int64                  `protobuf:"varint,15,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	Type2V2     NormalType             `protobuf:"varint,5,opt,name=type2_v2,json=type2V2,proto3,enum=message.NormalType" json:"type2_v2,omitempty"`
 	// Types that are valid to be assigned to Type2:
 	//
 	//	*Message_Normal
@@ -271,7 +272,6 @@ type Message struct {
 	// Types that are valid to be assigned to Data:
 	//
 	//	*Message_Ack
-	//	*Message_Connect
 	//	*Message_Candidate
 	//	*Message_Chat
 	//	*Message_Call
@@ -354,6 +354,13 @@ func (x *Message) GetMessageId() int64 {
 	return 0
 }
 
+func (x *Message) GetType2V2() NormalType {
+	if x != nil {
+		return x.Type2V2
+	}
+	return NormalType_NORMAL_TYPE_UNSPECIFIED
+}
+
 func (x *Message) GetType2() isMessage_Type2 {
 	if x != nil {
 		return x.Type2
@@ -361,6 +368,7 @@ func (x *Message) GetType2() isMessage_Type2 {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in message.proto.
 func (x *Message) GetNormal() NormalType {
 	if x != nil {
 		if x, ok := x.Type2.(*Message_Normal); ok {
@@ -370,6 +378,7 @@ func (x *Message) GetNormal() NormalType {
 	return NormalType_NORMAL_TYPE_UNSPECIFIED
 }
 
+// Deprecated: Marked as deprecated in message.proto.
 func (x *Message) GetAckStatus() AckStatus {
 	if x != nil {
 		if x, ok := x.Type2.(*Message_AckStatus); ok {
@@ -390,16 +399,6 @@ func (x *Message) GetAck() *Ack {
 	if x != nil {
 		if x, ok := x.Data.(*Message_Ack); ok {
 			return x.Ack
-		}
-	}
-	return nil
-}
-
-// Deprecated: Marked as deprecated in message.proto.
-func (x *Message) GetConnect() *Connect {
-	if x != nil {
-		if x, ok := x.Data.(*Message_Connect); ok {
-			return x.Connect
 		}
 	}
 	return nil
@@ -455,10 +454,12 @@ type isMessage_Type2 interface {
 }
 
 type Message_Normal struct {
+	// Deprecated: Marked as deprecated in message.proto.
 	Normal NormalType `protobuf:"varint,13,opt,name=normal,proto3,enum=message.NormalType,oneof"`
 }
 
 type Message_AckStatus struct {
+	// Deprecated: Marked as deprecated in message.proto.
 	AckStatus AckStatus `protobuf:"varint,14,opt,name=ack_status,json=ackStatus,proto3,enum=message.AckStatus,oneof"`
 }
 
@@ -472,11 +473,6 @@ type isMessage_Data interface {
 
 type Message_Ack struct {
 	Ack *Ack `protobuf:"bytes,6,opt,name=ack,proto3,oneof"`
-}
-
-type Message_Connect struct {
-	// Deprecated: Marked as deprecated in message.proto.
-	Connect *Connect `protobuf:"bytes,5,opt,name=connect,proto3,oneof"`
 }
 
 type Message_Candidate struct {
@@ -500,8 +496,6 @@ type Message_Pull struct {
 }
 
 func (*Message_Ack) isMessage_Data() {}
-
-func (*Message_Connect) isMessage_Data() {}
 
 func (*Message_Candidate) isMessage_Data() {}
 
@@ -657,10 +651,9 @@ func (x *Connect) GetDisplayName() string {
 }
 
 type Ack struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Deprecated: Marked as deprecated in message.proto.
-	Status AckStatus `protobuf:"varint,1,opt,name=status,proto3,enum=message.AckStatus" json:"status,omitempty"`
-	Reason string    `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Status AckStatus              `protobuf:"varint,1,opt,name=status,proto3,enum=message.AckStatus" json:"status,omitempty"`
+	Reason string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	// Deprecated: Marked as deprecated in message.proto.
 	MessageId     string `protobuf:"bytes,2,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -697,7 +690,6 @@ func (*Ack) Descriptor() ([]byte, []int) {
 	return file_message_proto_rawDescGZIP(), []int{4}
 }
 
-// Deprecated: Marked as deprecated in message.proto.
 func (x *Ack) GetStatus() AckStatus {
 	if x != nil {
 		return x.Status
@@ -890,7 +882,7 @@ var File_message_proto protoreflect.FileDescriptor
 
 const file_message_proto_rawDesc = "" +
 	"\n" +
-	"\rmessage.proto\x12\amessage\"\xdf\x04\n" +
+	"\rmessage.proto\x12\amessage\"\xe5\x04\n" +
 	"\aMessage\x12(\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x14.message.MessageTypeR\x04type\x12\x1b\n" +
 	"\tsender_id\x18\x02 \x01(\tR\bsenderId\x12\x1f\n" +
@@ -899,12 +891,12 @@ const file_message_proto_rawDesc = "" +
 	"\fcreated_time\x18\x04 \x01(\x03R\vcreatedTime\x12\x17\n" +
 	"\aconn_id\x18\f \x01(\x03R\x06connId\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x0f \x01(\x03R\tmessageId\x12-\n" +
-	"\x06normal\x18\r \x01(\x0e2\x13.message.NormalTypeH\x00R\x06normal\x123\n" +
+	"message_id\x18\x0f \x01(\x03R\tmessageId\x12.\n" +
+	"\btype2_v2\x18\x05 \x01(\x0e2\x13.message.NormalTypeR\atype2V2\x121\n" +
+	"\x06normal\x18\r \x01(\x0e2\x13.message.NormalTypeB\x02\x18\x01H\x00R\x06normal\x127\n" +
 	"\n" +
-	"ack_status\x18\x0e \x01(\x0e2\x12.message.AckStatusH\x00R\tackStatus\x12 \n" +
-	"\x03ack\x18\x06 \x01(\v2\f.message.AckH\x01R\x03ack\x120\n" +
-	"\aconnect\x18\x05 \x01(\v2\x10.message.ConnectB\x02\x18\x01H\x01R\aconnect\x122\n" +
+	"ack_status\x18\x0e \x01(\x0e2\x12.message.AckStatusB\x02\x18\x01H\x00R\tackStatus\x12 \n" +
+	"\x03ack\x18\x06 \x01(\v2\f.message.AckH\x01R\x03ack\x122\n" +
 	"\tcandidate\x18\a \x01(\v2\x12.message.CandidateH\x01R\tcandidate\x12#\n" +
 	"\x04chat\x18\b \x01(\v2\r.message.ChatH\x01R\x04chat\x12\"\n" +
 	"\x04call\x18\t \x01(\v2\f.message.SdpH\x01R\x04call\x12&\n" +
@@ -920,9 +912,9 @@ const file_message_proto_rawDesc = "" +
 	"\x03Sdp\x12\x10\n" +
 	"\x03sdp\x18\x02 \x01(\tR\x03sdp\"0\n" +
 	"\aConnect\x12!\n" +
-	"\fdisplay_name\x18\x01 \x01(\tR\vdisplayName:\x02\x18\x01\"p\n" +
-	"\x03Ack\x12.\n" +
-	"\x06status\x18\x01 \x01(\x0e2\x12.message.AckStatusB\x02\x18\x01R\x06status\x12\x16\n" +
+	"\fdisplay_name\x18\x01 \x01(\tR\vdisplayName:\x02\x18\x01\"l\n" +
+	"\x03Ack\x12*\n" +
+	"\x06status\x18\x01 \x01(\x0e2\x12.message.AckStatusR\x06status\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12!\n" +
 	"\n" +
 	"message_id\x18\x02 \x01(\tB\x02\x18\x01R\tmessageId\"^\n" +
@@ -998,10 +990,10 @@ var file_message_proto_goTypes = []any{
 }
 var file_message_proto_depIdxs = []int32{
 	0,  // 0: message.Message.type:type_name -> message.MessageType
-	1,  // 1: message.Message.normal:type_name -> message.NormalType
-	2,  // 2: message.Message.ack_status:type_name -> message.AckStatus
-	8,  // 3: message.Message.ack:type_name -> message.Ack
-	7,  // 4: message.Message.connect:type_name -> message.Connect
+	1,  // 1: message.Message.type2_v2:type_name -> message.NormalType
+	1,  // 2: message.Message.normal:type_name -> message.NormalType
+	2,  // 3: message.Message.ack_status:type_name -> message.AckStatus
+	8,  // 4: message.Message.ack:type_name -> message.Ack
 	9,  // 5: message.Message.candidate:type_name -> message.Candidate
 	10, // 6: message.Message.chat:type_name -> message.Chat
 	6,  // 7: message.Message.call:type_name -> message.Sdp
@@ -1026,7 +1018,6 @@ func file_message_proto_init() {
 		(*Message_Normal)(nil),
 		(*Message_AckStatus)(nil),
 		(*Message_Ack)(nil),
-		(*Message_Connect)(nil),
 		(*Message_Candidate)(nil),
 		(*Message_Chat)(nil),
 		(*Message_Call)(nil),

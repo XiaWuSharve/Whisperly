@@ -11,11 +11,10 @@ import (
 )
 
 type Router struct {
-	consumer      mq.Consumer[*datas.Send]
-	pool          *conn.Pool
-	Err           error
-	storeProducer mq.Producer
-	send2store    datas.Converter[*datas.Send, *datas.Store]
+	SendConsumer  mq.Consumer[*datas.Send]
+	Pool          *conn.Pool
+	StoreProducer mq.Producer
+	Send2store    datas.Converter[*datas.Send, *datas.Store]
 }
 
 var _ mq.Handler[*datas.Send] = (*Router)(nil)
@@ -23,19 +22,19 @@ var _ mq.Handler[*datas.Send] = (*Router)(nil)
 var ErrConnNotFound = errors.New("conn not exist")
 
 func (r *Router) Start() error {
-	return r.consumer.Start(r)
+	return r.SendConsumer.Start(r)
 }
 
-var ErrWaitingRetry = errors.New("send channel is full")
+// var ErrWaitingRetry = errors.New("send channel is full")
 
 func (r *Router) Handle(d *datas.Send) error {
-	handler, ok := r.pool.Get(d.ReceiverId)
+	handler, ok := r.Pool.Get(d.ReceiverId)
 	if !ok {
-		storeData, err := r.send2store.Convert(d)
+		storeData, err := r.Send2store.Convert(d)
 		if err != nil {
 			return fmt.Errorf("failed to convert send to store data: %w", err)
 		}
-		if _, err := r.storeProducer.Enqueue(storeData); err != nil {
+		if _, err := r.StoreProducer.Enqueue(storeData); err != nil {
 			return fmt.Errorf("cannot enqueue store producer: %w", err)
 		}
 		return nil
@@ -48,7 +47,7 @@ func (r *Router) Handle(d *datas.Send) error {
 	select {
 	case handler.SendChan <- d:
 	default:
-		return ErrWaitingRetry
+		return mq.ErrRequeue
 	}
 
 	return nil

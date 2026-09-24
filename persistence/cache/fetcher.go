@@ -100,6 +100,7 @@ func (f *Fetcher) Fetch(ctx context.Context, id string, requestOffset int64, han
 	}
 	messages := make([]*datas.Cache, len(messageStrings))
 	for i, v := range messageStrings {
+		// []byte()不是零拷贝
 		messages[i], err = f.decoder.Parse([]byte(v))
 		if err != nil {
 			return fmt.Errorf("failed to parse message: %w", err)

@@ -41,14 +41,13 @@ message Message {
   int64       created_time = 4;
   int64       conn_id      = 12;
   int64       message_id   = 15;
-
+  NormalType  type2_v2     = 5;
   oneof type2 {
-    NormalType normal     = 13;
-    AckStatus  ack_status = 14;
+    NormalType normal     = 13 [deprecated = true];
+    AckStatus  ack_status = 14 [deprecated = true];
   } // enabled when type = normal or ack
   oneof data {
     Ack       ack       = 6;
-    Connect   connect   = 5 [deprecated = true];
     Candidate candidate = 7;
     Chat      chat      = 8;
     Sdp       call      = 9;
@@ -73,7 +72,7 @@ message Connect {
 }
 
 message Ack {
-  AckStatus status     = 1 [deprecated = true];
+  AckStatus status     = 1;
   string    reason     = 3;
   string    message_id = 2 [deprecated = true];
 }

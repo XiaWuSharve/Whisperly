@@ -9,19 +9,20 @@ import (
 	"github.com/nsqio/go-nsq"
 )
 
-type ConsumerInt[M any] interface {
+type ConsumerInt[M datas.Decodable] interface {
 	Start(handler Handler[M]) error
 	Close() chan int
 }
 
-type Consumer[MessType any] struct {
+type Consumer[MessType datas.Decodable] struct {
 	// 交给子类初始化
-	Decoder           datas.Decoder[MessType]
+	decoder           MessType
 	consumer          *nsq.Consumer
 	NsqLookupdAddress string
+	MaxHeaderSize     int
 }
 
-var _ ConsumerInt[struct{}] = (*Consumer[struct{}])(nil)
+var _ ConsumerInt[datas.Decodable] = (*Consumer[datas.Decodable])(nil)
 
 type Handler[MessType any] interface {
 	Handle(message MessType) error
@@ -31,12 +32,17 @@ var ErrRequeue = errors.New("require requeue")
 
 func (c *Consumer[M]) Start(handler Handler[M]) error {
 	h := func(message *nsq.Message) error {
-		data, err := c.Decoder.Parse(message.Body)
+		bytes := make([]byte, c.MaxHeaderSize+len(message.Body))
+		copy(bytes[c.MaxHeaderSize:], message.Body)
+		err := c.decoder.Parse(&datas.Payload{
+			Bytes:        bytes,
+			BodyStartIdx: c.MaxHeaderSize,
+		})
 		if err != nil {
 			slog.Error("failed to parse during handling", "err", err)
 			return nil
 		}
-		if err := handler.Handle(data); err != nil {
+		if err := handler.Handle(c.decoder); err != nil {
 			if errors.Is(err, ErrRequeue) {
 				return err
 			}
@@ -62,7 +68,7 @@ func (c *Consumer[MessType]) Close() chan int {
 
 type ReceiveConsumer = Consumer[*datas.Receive]
 type SendConsumer = Consumer[*datas.Send]
-type StoreConsumer = Consumer[*datas.Cache]
+type StoreConsumer = Consumer[*datas.Store]
 
 type ConsumerMock[M any] struct {
 	handler Handler[M]
@@ -81,4 +87,4 @@ func (c *ConsumerMock[M]) Start(handler Handler[M]) error {
 	return nil
 }
 
-var _ ConsumerInt[any] = (*ConsumerMock[any])(nil)
+var _ ConsumerInt[datas.Decodable] = (*ConsumerMock[datas.Decodable])(nil)

@@ -14,10 +14,14 @@ import (
 
 	"github.com/XiaWuSharve/whisperly/config"
 	"github.com/XiaWuSharve/whisperly/datas"
+	"github.com/XiaWuSharve/whisperly/mq"
 	"github.com/XiaWuSharve/whisperly/network/conn"
 	"github.com/XiaWuSharve/whisperly/network/listener"
+	"github.com/XiaWuSharve/whisperly/persistence/repo"
+	"github.com/XiaWuSharve/whisperly/utils"
 	"github.com/bwmarrin/snowflake"
 	"github.com/gorilla/websocket"
+	"github.com/nsqio/go-nsq"
 	"github.com/spf13/cobra"
 	"github.com/xtaci/kcp-go/v5"
 )
@@ -36,6 +40,28 @@ var startCmd = &cobra.Command{
 		datas.Ids = node
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+		mqConfig := nsq.NewConfig()
+		receiveMq := mq.ReceiveMq{
+			Config:  mqConfig,
+			Topic:   "receive",
+			Decoder: &datas.Receive{},
+		}
+		sendMq := mq.ReceiveMq{
+			Config:  mqConfig,
+			Topic:   "send",
+			Decoder: &datas.Receive{},
+		}
+		storeMq := mq.ReceiveMq{
+			Config:  mqConfig,
+			Topic:   "store",
+			Decoder: &datas.Receive{},
+		}
+		store, err := repo.NewSyncStore()
+		if err != nil {
+			// TODO store不可用时降级
+			panic(err)
+		}
+		var pool *conn.Pool = utils.NewShardMap[string, *conn.SendHandler](128, utils.HashFunc)
 		cfg := config.Server
 		protocol := cfg.Protocol
 		host := cfg.Host
