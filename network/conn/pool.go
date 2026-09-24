@@ -6,12 +6,14 @@ import (
 	"github.com/XiaWuSharve/whisperly/utils"
 )
 
+// 要解决的是同步问题不是互斥问题mutex (x)
 type Pool struct {
 	// only shared memory structure are allowed to be coroutine safe (to avoid lock acquiring)
 	SendHandlersByConnId *utils.ShardMap[int64, *SendHandler]
 	SendHandlersByUserId *utils.ShardMap[string, *SendHandler]
 	UserIdByConnId       *utils.ShardMap[int64, string]
-	mu                   sync.Mutex
+	muSendHandler        sync.Mutex
+	muUserId             sync.Mutex
 }
 
 // coroutine safe
@@ -20,18 +22,21 @@ func (p *Pool) AddSendHandler(c *SendHandler) {
 }
 
 func (p *Pool) RemoveSendHandler(id int64) {
-	p.mu.Lock()
 	con, ok := p.SendHandlersByConnId.Get(id)
 	if ok {
 		con.Close()
+		p.muSendHandler.Lock()
 		p.SendHandlersByConnId.Delete(id)
+		p.muSendHandler.Unlock()
 	}
+	p.muUserId.Lock()
 	userId, ok := p.UserIdByConnId.Get(id)
 	if ok {
 		p.UserIdByConnId.Delete(id)
+		// 此时UpdateUserId：p.SendHandlersByUserId.Set(userId, sendHandler)
 		p.SendHandlersByUserId.Delete(userId)
 	}
-	p.mu.Unlock()
+	p.muUserId.Unlock()
 }
 
 func (p *Pool) FindByUserId(id string) (*SendHandler, bool) {
@@ -39,17 +44,21 @@ func (p *Pool) FindByUserId(id string) (*SendHandler, bool) {
 }
 
 func (p *Pool) UpdateUserId(connId int64, userId string) {
-	p.mu.Lock()
 	uid, ok := p.UserIdByConnId.Get(connId)
 	if ok {
-		sendHandler, ok2 := p.SendHandlersByConnId.Get(connId)
-		if !ok2 {
-			p.RemoveSendHandler(connId)
-			return
-		}
 		p.SendHandlersByUserId.Delete(uid)
-		p.SendHandlersByUserId.Set(userId, sendHandler)
 	}
+	p.muSendHandler.Lock()
+	sendHandler, ok2 := p.SendHandlersByConnId.Get(connId)
+	if !ok2 {
+		p.muSendHandler.Unlock()
+		p.RemoveSendHandler(connId)
+		return
+	}
+	//此时RemoveSendHandler: p.SendHandlersByConnId.Delete(id)
+	p.muUserId.Lock()
+	p.SendHandlersByUserId.Set(userId, sendHandler)
+	p.muUserId.Unlock()
+	p.muSendHandler.Unlock()
 	p.UserIdByConnId.Set(connId, userId)
-	p.mu.Unlock()
 }

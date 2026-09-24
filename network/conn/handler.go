@@ -70,7 +70,6 @@ type ReceiveHandler struct {
 	streamDecoder   datas.ReceiveStreamDecoder
 	storeConverter  datas.Converter[*datas.Receive, *datas.Store]
 	storeData       *datas.Store
-	sendHandler     *SendHandler
 	// to self sendHandler channel
 	SendChan chan *datas.Send
 	ok       bool
