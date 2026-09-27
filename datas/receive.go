@@ -1,8 +1,12 @@
 package datas
 
 import (
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
+	"net"
 	"time"
 
 	"github.com/XiaWuSharve/whisperly/config"
@@ -21,33 +25,149 @@ type Receive struct {
 	MessageId   int64
 	AckSequence int64
 	PullCount   int32
+	buf         [16]byte
+	err         error
+}
+
+// ToPayload implements [Encodable].
+func (re *Receive) ToPayload() *Payload {
+	panic("unimplemented")
+	// binary.BigEndian.PutUint64(r.Payload[0:8], uint64(r.CreatedTime))
+	// return r.Payload
 }
 
 // Parse implements [Decodable].
-func (r *Receive) Parse(data *Payload) error {
+func (re *Receive) From(data *Payload) {
 	panic("unimplemented")
 	// r.CreatedTime = int64(binary.BigEndian.Uint64(data[0:8]))
 	// r.Payload = data
 	// return nil
 }
 
-func (r *Receive) FromStore(s *Store) {
+func (re *Receive) FromStore(s *Store) {
+	panic("unimplemented")
+}
 
+type ErrWrongType struct {
+	Type MessageType
+}
+
+// Error implements [error].
+func (e *ErrWrongType) Error() string {
+	return fmt.Sprintf("wrong message type: %s", e.Type.String())
+}
+
+var _ error = (*ErrWrongType)(nil)
+
+func (re *Receive) throw() error {
+	if errors.Is(re.err, io.EOF) {
+		return net.ErrClosed
+	}
+	return fmt.Errorf("failed to read header: %w", re.err)
+}
+
+func (re *Receive) readN(r io.Reader, n int) error {
+	_, re.err = io.ReadFull(r, re.buf[:n])
+	return re.err
+}
+
+func (re *Receive) read(r io.Reader, buf []byte) error {
+	_, re.err = io.ReadFull(r, buf)
+	return re.err
+}
+
+func (re *Receive) discard(r io.Reader, n int) error {
+	_, re.err = io.CopyN(io.Discard, r, int64(n))
+	return re.err
+}
+
+func (re *Receive) FromStream(r io.Reader, headerBufSize int) error {
+	if re.readN(r, 1) != nil {
+		return re.throw()
+	}
+	re.Type = MessageType(re.buf[0] >> 4)
+	if re.Type != MessageType_NORMAL && re.Type != MessageType_PULL {
+		return &ErrWrongType{re.Type}
+	}
+	if re.readN(r, 8) != nil {
+		return re.throw()
+	}
+	re.CreatedTime = int64(binary.BigEndian.Uint64(re.buf[:8]))
+	if ValidateTime(re.CreatedTime) {
+		switch re.Type {
+		case MessageType_NORMAL:
+			if re.readN(r, 8) != nil {
+				return re.throw()
+			}
+			re.MessageId = int64(binary.BigEndian.Uint64(re.buf[:8]))
+			if re.readN(r, 6) != nil {
+				return re.throw()
+			}
+			// TODO 过滤空ID
+			senderIdBuf := make([]byte, re.buf[0])
+			receiverIdBuf := make([]byte, re.buf[1])
+			payloadBuf := make([]byte, headerBufSize+int(binary.BigEndian.Uint32(re.buf[2:6])))
+			if re.read(r, senderIdBuf) != nil {
+				return re.throw()
+			}
+			re.SenderId = string(senderIdBuf)
+			if re.read(r, receiverIdBuf) != nil {
+				return re.throw()
+			}
+			re.ReceiverId = string(receiverIdBuf)
+			if re.read(r, payloadBuf[headerBufSize:]) != nil {
+				return re.throw()
+			}
+			re.Payload.BodyStartIdx = headerBufSize
+			re.Payload.Bytes = payloadBuf
+		case MessageType_PULL:
+			if re.readN(r, 8) != nil {
+				return re.throw()
+			}
+			re.AckSequence = int64(binary.BigEndian.Uint64(re.buf[:8]))
+			if re.readN(r, 4) != nil {
+				return re.throw()
+			}
+			re.PullCount = int32(binary.BigEndian.Uint32(re.buf[:4]))
+			if re.readN(r, 1) != nil {
+				return re.throw()
+			}
+			senderIdBuf := make([]byte, re.buf[0])
+			if re.read(r, senderIdBuf) != nil {
+				return re.throw()
+			}
+			re.SenderId = string(senderIdBuf)
+		}
+		slog.Debug("received", "created time", time.UnixMilli(re.CreatedTime).String(), "payload length (Bytes)", len(re.Payload.Bytes)-headerBufSize)
+	} else {
+		switch re.Type {
+		case MessageType_NORMAL:
+			if re.discard(r, 8) != nil {
+				return re.throw()
+			}
+			if re.readN(r, 6) != nil {
+				return re.throw()
+			}
+			if re.discard(r, int(re.buf[0])+int(re.buf[1])+int(binary.BigEndian.Uint32(re.buf[2:6]))) != nil {
+				return re.throw()
+			}
+		case MessageType_PULL:
+			if re.discard(r, 12) != nil {
+				return re.throw()
+			}
+			if re.readN(r, 1) != nil {
+				return re.throw()
+			}
+			if re.discard(r, int(re.buf[0])) != nil {
+				return re.throw()
+			}
+		}
+		return ErrTimeLargeOffset
+	}
+	return nil
 }
 
 var _ Encodable = (*Receive)(nil)
-
-// GetHeaderLen implements [Encodable].
-func (r *Receive) GetHeaderLen() int {
-	return 8
-}
-
-// ToByte implements [Encodable].
-func (r *Receive) ToByte() *Payload {
-	panic("unimplemented")
-	// binary.BigEndian.PutUint64(r.Payload[0:8], uint64(r.CreatedTime))
-	// return r.Payload
-}
 
 type ReceiveDecoder struct {
 	frame Receive
@@ -74,35 +194,6 @@ func ValidateTime(createdTime int64) bool {
 		return false
 	}
 	return true
-}
-
-func (fsd *ReceiveStreamDecoder) Parse(r io.Reader) (*Receive, error) {
-	panic("unimplemented")
-	// receive frame |CreatedTime 8B|Len 4B -> 1Unit = 1B|
-	// send frame |AckType 1B|MessageId 8B|Len 4B -> 1Unit = 1B|
-	// if _, fsd.Err = io.ReadFull(r, fsd.Rbuf[:]); fsd.Err != nil {
-	// 	if errors.Is(fsd.Err, io.ErrClosedPipe) {
-	// 		return nil, net.ErrClosed
-	// 	}
-	// 	return nil, fmt.Errorf("failed to read header: %w", fsd.Err)
-	// }
-	// fsd.frame.CreatedTime = int64(binary.BigEndian.Uint64(fsd.Rbuf[0:8]))
-	// fsd.PayloadLen = int(binary.BigEndian.Uint32(fsd.Rbuf[8:12]))
-	// slog.Debug("received", "header", fsd.Rbuf[:], "created time", time.UnixMilli(fsd.frame.CreatedTime).String(), "payload length (Bytes)", fsd.PayloadLen)
-	// if !ValidateTime(fsd.frame.CreatedTime) {
-	// io.CopyN(io.Discard, r, int64(fsd.PayloadLen))
-	// 	return nil, ErrTimeLargeOffset
-	// }
-	// 预留给生产者字节编码的8字节用于存放created time，避免编码的时候拷贝payload
-	// fsd.frame.Payload = make([]byte, 8+fsd.PayloadLen)
-	// fsd.frame.Payload = fsd.frame.Payload[8:]
-	// if _, fsd.Err = io.ReadFull(r, fsd.frame.Payload); fsd.Err != nil {
-	// 	if errors.Is(fsd.Err, io.ErrClosedPipe) {
-	// 		return nil, net.ErrClosed
-	// 	}
-	// 	return nil, fmt.Errorf("failed to read payload: %w", fsd.Err)
-	// }
-	// return &fsd.frame, nil
 }
 
 type Receive2MMessage struct {

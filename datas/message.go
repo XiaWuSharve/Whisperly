@@ -5,22 +5,34 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// use NewMMessage(message *Message, headerSize int)
 type MMessage struct {
 	Payload
-	Message
+	*Message
 }
 
-// Parse implements [Decodable].
-func (p *MMessage) Parse(*Payload) error {
+// From implements [Decodable].
+func (p *MMessage) From(*Payload) {
 	panic("unimplemented")
 }
 
-var _ Encodable = (*MMessage)(nil)
+func NewMMessage(message *Message, headerSize int) *MMessage {
+	m := &MMessage{
+		Message: message,
+	}
+	m.BodyStartIdx = headerSize
+	return m
+}
 
-func (p *MMessage) ToByte() *Payload {
-	p.Bytes, _ = proto.Marshal(p)
+// ToPayload implements [Encodable].
+func (p *MMessage) ToPayload() *Payload {
+	bytes, _ := proto.Marshal(p)
+	p.Bytes = make([]byte, p.BodyStartIdx+len(bytes))
+	copy(p.Bytes[p.BodyStartIdx:], bytes)
 	return &p.Payload
 }
+
+var _ Encodable = (*MMessage)(nil)
 
 type MessageDecoder struct {
 	message MMessage
@@ -47,11 +59,7 @@ func (m2f *MMessage2Send) Convert(mess *MMessage) (*Send, error) {
 	m2f.frame.Type = mess.Type
 	m2f.frame.ReceiverId = mess.ReceiverId
 	m2f.frame.MessageId = mess.MessageId
-	m2f.frame.ConnId = mess.ConnId
-	if mess.Type == MessageType_ACK {
-		m2f.frame.Ack = mess.GetAck()
-	}
-	m2f.frame.Payload = *(mess.ToByte())
+	m2f.frame.Payload = *mess.ToPayload()
 	return &m2f.frame, nil
 }
 
