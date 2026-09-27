@@ -12,6 +12,7 @@ import (
 	"github.com/XiaWuSharve/whisperly/config"
 )
 
+// TODO 对pull类型是否也要messId or messId = 0？
 // receive frame:
 // | MessageType type = NORMAL 4b | reserved 4b | created time 8B | mess id 8B | sender id len 1B | receiver id len 1B |
 // | payload len 4B | sender id...| receiver id... | payload... |
@@ -25,15 +26,50 @@ type Receive struct {
 	MessageId   int64
 	AckSequence int64
 	PullCount   int32
+	cursor      int
+	lenReceiver int
+	lenSender   int
 	buf         [16]byte
 	err         error
 }
 
 // ToPayload implements [Encodable].
 func (re *Receive) ToPayload() *Payload {
-	panic("unimplemented")
-	// binary.BigEndian.PutUint64(r.Payload[0:8], uint64(r.CreatedTime))
-	// return r.Payload
+	re.cursor = re.BodyStartIdx
+	switch re.Type {
+	case MessageType_NORMAL:
+		re.lenReceiver = len(re.ReceiverId)
+		copy(re.Bytes[re.cursor-re.lenReceiver:re.cursor], re.ReceiverId)
+		re.cursor -= re.lenReceiver
+		re.lenSender = len(re.SenderId)
+		copy(re.Bytes[re.cursor-re.lenSender:re.cursor], re.SenderId)
+		re.cursor -= re.lenSender
+		binary.BigEndian.PutUint32(re.Bytes[re.cursor-len(re.Bytes[re.BodyStartIdx:]):re.cursor], uint32(len(re.Bytes[re.BodyStartIdx:])))
+		re.cursor -= 4
+		re.Bytes[re.cursor-1] = byte(re.lenReceiver)
+		re.Bytes[re.cursor-2] = byte(re.lenSender)
+		re.cursor -= 2
+		binary.BigEndian.PutUint64(re.Bytes[re.cursor-8:re.cursor], uint64(re.MessageId))
+		re.cursor -= 8
+		binary.BigEndian.PutUint64(re.Bytes[re.cursor-8:re.cursor], uint64(re.CreatedTime))
+		re.cursor -= 8
+	case MessageType_PULL:
+		re.lenSender = len(re.SenderId)
+		copy(re.Bytes[re.cursor-re.lenSender:re.cursor], re.SenderId)
+		re.cursor -= re.lenSender
+		re.Bytes[re.cursor-1] = byte(re.lenSender)
+		re.cursor--
+		binary.BigEndian.PutUint32(re.Bytes[re.cursor-4:re.cursor], uint32(re.PullCount))
+		re.cursor -= 4
+		binary.BigEndian.PutUint64(re.Bytes[re.cursor-8:re.cursor], uint64(re.AckSequence))
+		re.cursor -= 8
+		binary.BigEndian.PutUint64(re.Bytes[re.cursor-8:re.cursor], uint64(re.CreatedTime))
+		re.cursor -= 8
+	}
+	re.Bytes[re.cursor-1] = byte(re.Type << 4)
+	re.cursor--
+	re.BodyStartIdx = re.cursor
+	return &re.Payload
 }
 
 // Parse implements [Decodable].
@@ -118,9 +154,9 @@ func (re *Receive) FromStream(r io.Reader, headerBufSize int) error {
 			if re.read(r, payloadBuf[headerBufSize:]) != nil {
 				return re.throw()
 			}
-			re.Payload.BodyStartIdx = headerBufSize
 			re.Payload.Bytes = payloadBuf
 		case MessageType_PULL:
+			re.MessageId = 0
 			if re.readN(r, 8) != nil {
 				return re.throw()
 			}
@@ -137,7 +173,9 @@ func (re *Receive) FromStream(r io.Reader, headerBufSize int) error {
 				return re.throw()
 			}
 			re.SenderId = string(senderIdBuf)
+			re.Payload.Bytes = make([]byte, headerBufSize)
 		}
+		re.Payload.BodyStartIdx = headerBufSize
 		slog.Debug("received", "created time", time.UnixMilli(re.CreatedTime).String(), "payload length (Bytes)", len(re.Payload.Bytes)-headerBufSize)
 	} else {
 		switch re.Type {

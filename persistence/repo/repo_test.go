@@ -60,16 +60,16 @@ func TestTableStore(t *testing.T) {
 			t.Error(err, want[i])
 		}
 	}
-	out, err := store.Pull(ctx, "sharve", 3)
+	outSeq, outStore, err := store.Pull(ctx, "sharve", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != 2 {
-		t.Fatal("len(out): ", len(out))
+	if len(outStore) != 2 {
+		t.Fatal("len(out): ", len(outStore))
 	}
-	for i, o := range out {
-		if o.Sequence == 0 {
-			t.Fatal("o.Sequence == 0")
+	for i, o := range outStore {
+		if outSeq[i] == 0 {
+			t.Fatal("outSeq[i] == 0")
 		}
 		if o.ReceiverId != "sharve" {
 			t.Fatal(o.ReceiverId)
@@ -78,16 +78,16 @@ func TestTableStore(t *testing.T) {
 			t.Fatal(string(o.Payload.Bytes))
 		}
 	}
-	out, err = store.Pull(ctx, "sharve", 1)
+	outSeq, outStore, err = store.Pull(ctx, "sharve", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != 1 {
-		t.Fatal("len(out): ", len(out))
+	if len(outStore) != 1 {
+		t.Fatal("len(out): ", len(outStore))
 	}
-	for _, o := range out {
-		if o.Sequence == 0 {
-			t.Fatal("o.Sequence == 0")
+	for i, o := range outStore {
+		if outSeq[i] == 0 {
+			t.Fatal("outSeq[i] == 0")
 		}
 		if o.ReceiverId != "sharve" {
 			t.Fatal(o.ReceiverId)
@@ -96,19 +96,19 @@ func TestTableStore(t *testing.T) {
 			t.Fatal(string(o.Payload.Bytes))
 		}
 	}
-	if err := store.Ack(ctx, "sharve", out[0].Sequence); err != nil {
+	if err := store.Ack(ctx, "sharve", outSeq[0]); err != nil {
 		t.Fatal(err)
 	}
-	out, err = store.Pull(ctx, "sharve", 3)
+	outSeq, outStore, err = store.Pull(ctx, "sharve", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != 1 {
-		t.Fatal("len(out): ", len(out))
+	if len(outStore) != 1 {
+		t.Fatal("len(out): ", len(outStore))
 	}
-	for _, o := range out {
-		if o.Sequence == 0 {
-			t.Fatal("o.Sequence == 0")
+	for i, o := range outStore {
+		if outSeq[i] == 0 {
+			t.Fatal("outSeq[i] == 0")
 		}
 		if o.ReceiverId != "sharve" {
 			t.Fatal(o.ReceiverId)

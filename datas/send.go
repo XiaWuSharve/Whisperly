@@ -14,6 +14,7 @@ type Send struct {
 	AckStatus AckStatus
 	// CreatedTime int64
 	// Ack        *Ack
+	// TODO 再套一层routedSend
 	ReceiverId string // 换成发送者Id不挺好？
 	MessageId  int64
 	Sequence   int64
@@ -57,8 +58,8 @@ func (s *Send) From(p *Payload) {
 }
 
 func (s *Send) FromMMessage(m *MMessage) error {
-	s.Payload = *m.ToPayload()
 	s.Type = m.Type
+	s.ReceiverId = m.GetReceiverId()
 	switch m.Type {
 	case MessageType_NORMAL:
 		s.Sequence = m.GetSequence()
@@ -68,8 +69,22 @@ func (s *Send) FromMMessage(m *MMessage) error {
 	default:
 		return &ErrUnsupportedType{s.Type}
 	}
+	s.Payload = *m.ToPayload()
 	return nil
 }
 
 var _ Encodable = (*Send)(nil)
 var _ Decodable = (*Send)(nil)
+
+// receiver 发送给 sender 的数据结构体一律不能复用（原地修改）
+// TODO reason
+func (r *Send) FromAck(status AckStatus, messId int64, reason string) {
+	// TODO reason bit
+	r.Payload = Payload{
+		Bytes:        make([]byte, 13),
+		BodyStartIdx: 13,
+	}
+	r.Type = MessageType_ACK
+	r.AckStatus = status
+	r.MessageId = messId
+}

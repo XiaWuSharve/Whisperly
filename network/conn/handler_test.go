@@ -23,17 +23,29 @@ type storeHandler struct {
 }
 
 func (h *storeHandler) Handle(message *datas.Store) error {
-	if message.Type != datas.MessageType_NORMAL {
+	switch message.Type {
+	case datas.MessageType_NORMAL:
+		if message.SendType {
+			h.T.Fatal("message.SendType != false")
+		}
+		if message.ReceiverId != "glacc" {
+			h.T.Fatal(message.ReceiverId)
+		}
+		if len(message.Bytes)-message.BodyStartIdx <= 0 {
+			h.T.Fatal(len(message.Bytes), message.BodyStartIdx)
+		}
+	case datas.MessageType_PULL:
+		if message.AckSequence >= datas.GenId() {
+			h.T.Fatal(message.AckSequence)
+		}
+		if message.PullCount != 7 {
+			h.T.Fatal(message.PullCount)
+		}
+		if message.ReceiverId != "sharve" {
+			h.T.Fatal(message.ReceiverId)
+		}
+	default:
 		h.T.Fatal(message.Type.String())
-	}
-	if message.SendType {
-		h.T.Fatal("message.SendType != false")
-	}
-	if message.ReceiverId != "glacc" {
-		h.T.Fatal(message.ReceiverId)
-	}
-	if len(message.Bytes)-message.BodyStartIdx <= 0 {
-		h.T.Fatal(len(message.Bytes), message.BodyStartIdx)
 	}
 	close(h.done)
 	return nil
@@ -90,7 +102,7 @@ func prepareClient(t *testing.T) *Env {
 	}
 	// client 构造
 	sendHandler := &SendHandler{
-		SendChan: make(chan *datas.Send, 1),
+		SendChan: make(chan datas.Send, 1),
 	}
 
 	receiveHandler := &ReceiveHandler{
@@ -152,7 +164,7 @@ func TestSendHandler(t *testing.T) {
 		},
 	}, 64)
 
-	s := &datas.Send{}
+	s := datas.Send{}
 	if err := s.FromMMessage(m); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +239,7 @@ func TestReceiveHandlerOnline(t *testing.T) {
 	buf.WriteString("glacc")
 	buf.Write(body)
 
-	c.ReceiveHandler.Router.Set("glacc", make(chan *datas.Send))
+	c.ReceiveHandler.Router.Set("glacc", make(chan datas.Send))
 	_, err := io.Copy(c.Conn.(*MockConn).Writer, buf)
 	if err != nil {
 		t.Fatal(err)
@@ -329,6 +341,59 @@ func TestReceiveHandlerOffline(t *testing.T) {
 	}
 	mId := binary.BigEndian.Uint64(gotAck[1:9])
 	if mId == 0 || mId >= uint64(datas.GenId()) {
+		t.Fatal(mId)
+	}
+}
+
+func TestReceiveHandlerPull(t *testing.T) {
+	e := prepareClient(t)
+	c := e.c
+
+	wg := sync.WaitGroup{}
+	wg.Go(func() {
+		if err := c.SendHandler.Start(); err != nil && !errors.Is(err, net.ErrClosed) {
+			t.Fatal(err)
+		}
+	})
+	wg.Go(func() {
+		if err := c.ReceiveHandler.Start(); err != nil && !errors.Is(err, net.ErrClosed) {
+			t.Fatal(err)
+		}
+	})
+
+	buf := bytes.NewBuffer(nil)
+	buf.WriteByte(byte(datas.MessageType_PULL << 4))
+	buf.Write(binary.BigEndian.AppendUint64([]byte{}, uint64(time.Now().UnixMilli())))
+	buf.Write(binary.BigEndian.AppendUint64([]byte{}, uint64(datas.GenId())))
+	buf.Write(binary.BigEndian.AppendUint32([]byte{}, 7))
+	buf.WriteByte(6)
+	buf.WriteString("sharve")
+
+	// c.ReceiveHandler.Router.Set("glacc", make(chan *datas.Send))
+	_, err := io.Copy(c.Conn.(*MockConn).Writer, buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(time.Second)
+	_, offline := c.ReceiveHandler.Router.IsOffline("sharve")
+	if offline {
+		t.Fatal("offline != false")
+	}
+	c.Conn.Close()
+	wg.Wait()
+	_, offline = c.ReceiveHandler.Router.IsOffline("sharve")
+	if !offline {
+		t.Fatal("offline == false")
+	}
+	<-e.storeHandler.done
+	gotAck := c.Conn.(*MockConn).Data
+	// |MessageType_NORMAL|Sequence != 0|payload len 4B ！= 0|payload|
+	if gotAck[0] != byte(datas.MessageType_ACK<<4)|byte(datas.AckStatus_SENDING) {
+		t.Fatal(gotAck[0])
+	}
+	mId := binary.BigEndian.Uint64(gotAck[1:9])
+	if mId != 0 {
 		t.Fatal(mId)
 	}
 }

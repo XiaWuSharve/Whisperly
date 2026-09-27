@@ -32,6 +32,21 @@ func (p *MMessage) ToPayload() *Payload {
 	return &p.Payload
 }
 
+func (p *MMessage) FromReceive(r *Receive) {
+	p.Data = &Message_Pull{
+		Pull: &Pull{
+			AckSequence: r.AckSequence,
+			PullCount:   r.PullCount,
+		},
+	}
+	p.CreatedTime = r.CreatedTime
+	p.MessageId = r.MessageId
+	p.ReceiverId = r.ReceiverId
+	p.SenderId = r.SenderId
+	p.Type = r.Type
+	p.Payload = r.Payload
+}
+
 var _ Encodable = (*MMessage)(nil)
 
 type MessageDecoder struct {

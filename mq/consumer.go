@@ -16,7 +16,6 @@ type ConsumerInt[M datas.Decodable] interface {
 
 type Consumer[MessType datas.Decodable] struct {
 	// 交给子类初始化
-	decodeData        MessType
 	consumer          *nsq.Consumer
 	NsqLookupdAddress string
 }
@@ -31,8 +30,10 @@ var ErrRequeue = errors.New("require requeue")
 
 func (c *Consumer[M]) Start(handler Handler[M]) error {
 	h := func(message *nsq.Message) error {
-		c.decodeData.From(datas.FromByte(message.Body, 128))
-		if err := handler.Handle(c.decodeData); err != nil {
+		// TODO 拷贝？
+		var decodeData M
+		decodeData.From(datas.FromByte(message.Body, 128))
+		if err := handler.Handle(decodeData); err != nil {
 			if errors.Is(err, ErrRequeue) {
 				return err
 			}

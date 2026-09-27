@@ -19,8 +19,8 @@ func (h *TestHandler) Handle(m *datas.MMessage) error {
 		h.SuccessCount++
 	}()
 	// 基本字段检查
-	if m.Message.ConnId == 0 {
-		h.T.Fatal("m.Message.ConnId: ", m.Message.ConnId)
+	if m.Message.MessageId == 0 {
+		h.T.Fatal("m.Message.MessageId: ", m.Message.MessageId)
 	}
 	if m.Message.SenderId != "sharve" {
 		h.T.Fatal("m.Message.SenderId: ", m.Message.SenderId)
@@ -85,27 +85,25 @@ func TestMq(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer producer.Close()
-	transactionChan, err := producer.Enqueue(&datas.MMessage{
-		Message: datas.Message{
-			Type: datas.MessageType_NORMAL,
-			Type2: &datas.Message_Normal{
-				Normal: datas.NormalType_CHAT,
-			},
-			SenderId:    "sharve",
-			ReceiverId:  "glacc",
-			CreatedTime: time.Now().UnixMilli(),
-			ConnId:      datas.GenId(),
-			Data: &datas.Message_Chat{
-				Chat: &datas.Chat{
-					DisplayName: "夏午",
-					MessageChain: []*datas.MessageUnit{
-						{Type: datas.MessageUnitType_TEXT, Message: "hello "},
-						{Type: datas.MessageUnitType_TEXT, Message: "mq"},
-					},
+	transactionChan, err := producer.Enqueue(datas.NewMMessage(&datas.Message{
+		Type: datas.MessageType_NORMAL,
+		Type2: &datas.Message_Normal{
+			Normal: datas.NormalType_CHAT,
+		},
+		SenderId:    "sharve",
+		ReceiverId:  "glacc",
+		CreatedTime: time.Now().UnixMilli(),
+		MessageId:   datas.GenId(),
+		Data: &datas.Message_Chat{
+			Chat: &datas.Chat{
+				DisplayName: "夏午",
+				MessageChain: []*datas.MessageUnit{
+					{Type: datas.MessageUnitType_TEXT, Message: "hello "},
+					{Type: datas.MessageUnitType_TEXT, Message: "mq"},
 				},
 			},
 		},
-	})
+	}, 128))
 	transaction := <-transactionChan
 	if err := transaction.Error; err != nil {
 		t.Fatal("enqueue failed", err)
