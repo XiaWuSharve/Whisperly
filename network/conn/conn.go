@@ -78,11 +78,15 @@ func (c *WsConn) GetId() int64 {
 type MockConn struct {
 	Id     int64
 	Reader io.Reader
-	Output []byte
+	Writer *io.PipeWriter
+	Data   []byte
+	closed bool
 }
 
 // Close implements [Conn].
 func (m *MockConn) Close() error {
+	m.closed = true
+	m.Writer.Close()
 	return nil
 }
 
@@ -98,7 +102,10 @@ func (m *MockConn) GetReader() io.Reader {
 
 // Send implements [Conn].
 func (m *MockConn) Send(data []byte) error {
-	m.Output = data
+	if m.closed {
+		return errors.New("sending on closed conn")
+	}
+	m.Data = append(m.Data, data...)
 	return nil
 }
 
