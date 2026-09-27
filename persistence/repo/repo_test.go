@@ -29,26 +29,20 @@ func TestTableStore(t *testing.T) {
 	}()
 	want := []*datas.Store{
 		{
+			Type:       datas.MessageType_NORMAL,
 			SendType:   true,
 			ReceiverId: "sharve",
-			Payload: datas.Payload{
-				Bytes:        []byte("test timeline"),
-				BodyStartIdx: 256,
-			},
+			Payload:    *datas.FromByte([]byte("test timeline"), 128),
 		},
 		{
+			Type:       datas.MessageType_NORMAL,
 			ReceiverId: "sharve",
-			Payload: datas.Payload{
-				Bytes:        []byte("hello sharve"),
-				BodyStartIdx: 256,
-			},
+			Payload:    *datas.FromByte([]byte("hello sharve"), 128),
 		},
 		{
+			Type:       datas.MessageType_NORMAL,
 			ReceiverId: "glacc",
-			Payload: datas.Payload{
-				Bytes:        []byte("hello glacc"),
-				BodyStartIdx: 256,
-			},
+			Payload:    *datas.FromByte([]byte("hello glacc"), 128),
 		},
 	}
 	errs, err := store.Push(ctx, want)
@@ -74,7 +68,7 @@ func TestTableStore(t *testing.T) {
 		if o.ReceiverId != "sharve" {
 			t.Fatal(o.ReceiverId)
 		}
-		if string(o.Payload.Bytes) != string(want[1-i].Payload.Bytes) {
+		if string(datas.ToByte(&o.Payload)) != string(datas.ToByte(&want[1-i].Payload)) {
 			t.Fatal(string(o.Payload.Bytes))
 		}
 	}
@@ -92,7 +86,7 @@ func TestTableStore(t *testing.T) {
 		if o.ReceiverId != "sharve" {
 			t.Fatal(o.ReceiverId)
 		}
-		if string(o.Payload.Bytes) != string(want[1].Payload.Bytes) {
+		if string(datas.ToByte(&o.Payload)) != string(datas.ToByte(&want[1].Payload)) {
 			t.Fatal(string(o.Payload.Bytes))
 		}
 	}
@@ -113,7 +107,7 @@ func TestTableStore(t *testing.T) {
 		if o.ReceiverId != "sharve" {
 			t.Fatal(o.ReceiverId)
 		}
-		if string(o.Payload.Bytes) != string(want[0].Payload.Bytes) {
+		if string(datas.ToByte(&o.Payload)) != string(datas.ToByte(&want[0].Payload)) {
 			t.Fatal(string(o.Payload.Bytes))
 		}
 	}
