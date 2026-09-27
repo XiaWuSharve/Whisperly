@@ -1,5 +1,13 @@
 package datas
 
+import (
+	"encoding/binary"
+	"fmt"
+)
+
+// send frame:
+// | MessageType type = NORMAL 4b | reserved 4b | sequence 8B | payload len 4B | payload... |
+// | MessageType type = ACK 4b | AckStatus 4b | mess id 8B | payload len 4B | payload... |
 type Send struct {
 	Payload
 	Type        MessageType

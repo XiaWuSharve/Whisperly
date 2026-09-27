@@ -7,6 +7,20 @@ option java_package = "com.github.xiawusharve.webrtc";
 // 不支持描述符、嵌套构建器
 option optimize_for = LITE_RUNTIME;
 
+// frame header interface
+// send frame:
+
+// | MessageType type = NORMAL 4b | reserved 4b | sequence 8B | payload len 4B | payload... |
+
+// | MessageType type = ACK 4b | AckStatus 4b | mess id 8B | payload len 4B | payload... |
+
+// receive frame:
+
+// | MessageType type = NORMAL 4b | reserved 4b | created time 8B | mess id 8B | sender id len 1B | receiver id len 1B |
+// | payload len 4B | sender id...| receiver id... | payload... |
+
+// | MessageType type = PULL 4b | reserved 4b | created time 8B | ack sequence 8B | pull count 4B | sender id len 1B | sender id... |
+
 enum MessageType {
   MESSAGE_TYPE_UNSPECIFIED = 0;
   CONNECT                  = 1 [deprecated = true];
@@ -39,8 +53,12 @@ message Message {
   string      sender_id    = 2;
   string      receiver_id  = 3;
   int64       created_time = 4;
-  int64       conn_id      = 12;
+
+  // int64       conn_id      = 12 [deprecated = true];
+  // client-side message id
   int64       message_id   = 15;
+  // server-side sequence
+  int64 sequence = 12;
   NormalType  type2_v2     = 5;
   oneof type2 {
     NormalType normal     = 13 [deprecated = true];

@@ -261,9 +261,12 @@ type Message struct {
 	SenderId    string                 `protobuf:"bytes,2,opt,name=sender_id,json=senderId,proto3" json:"sender_id,omitempty"`
 	ReceiverId  string                 `protobuf:"bytes,3,opt,name=receiver_id,json=receiverId,proto3" json:"receiver_id,omitempty"`
 	CreatedTime int64                  `protobuf:"varint,4,opt,name=created_time,json=createdTime,proto3" json:"created_time,omitempty"`
-	ConnId      int64                  `protobuf:"varint,12,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
-	MessageId   int64                  `protobuf:"varint,15,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	Type2V2     NormalType             `protobuf:"varint,5,opt,name=type2_v2,json=type2V2,proto3,enum=message.NormalType" json:"type2_v2,omitempty"`
+	// int64       conn_id      = 12 [deprecated = true];
+	// client-side message id
+	MessageId int64 `protobuf:"varint,15,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	// server-side sequence
+	Sequence int64      `protobuf:"varint,12,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	Type2V2  NormalType `protobuf:"varint,5,opt,name=type2_v2,json=type2V2,proto3,enum=message.NormalType" json:"type2_v2,omitempty"`
 	// Types that are valid to be assigned to Type2:
 	//
 	//	*Message_Normal
@@ -340,16 +343,16 @@ func (x *Message) GetCreatedTime() int64 {
 	return 0
 }
 
-func (x *Message) GetConnId() int64 {
+func (x *Message) GetMessageId() int64 {
 	if x != nil {
-		return x.ConnId
+		return x.MessageId
 	}
 	return 0
 }
 
-func (x *Message) GetMessageId() int64 {
+func (x *Message) GetSequence() int64 {
 	if x != nil {
-		return x.MessageId
+		return x.Sequence
 	}
 	return 0
 }
@@ -882,16 +885,16 @@ var File_message_proto protoreflect.FileDescriptor
 
 const file_message_proto_rawDesc = "" +
 	"\n" +
-	"\rmessage.proto\x12\amessage\"\xe5\x04\n" +
+	"\rmessage.proto\x12\amessage\"\xe8\x04\n" +
 	"\aMessage\x12(\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x14.message.MessageTypeR\x04type\x12\x1b\n" +
 	"\tsender_id\x18\x02 \x01(\tR\bsenderId\x12\x1f\n" +
 	"\vreceiver_id\x18\x03 \x01(\tR\n" +
 	"receiverId\x12!\n" +
-	"\fcreated_time\x18\x04 \x01(\x03R\vcreatedTime\x12\x17\n" +
-	"\aconn_id\x18\f \x01(\x03R\x06connId\x12\x1d\n" +
+	"\fcreated_time\x18\x04 \x01(\x03R\vcreatedTime\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x0f \x01(\x03R\tmessageId\x12.\n" +
+	"message_id\x18\x0f \x01(\x03R\tmessageId\x12\x1a\n" +
+	"\bsequence\x18\f \x01(\x03R\bsequence\x12.\n" +
 	"\btype2_v2\x18\x05 \x01(\x0e2\x13.message.NormalTypeR\atype2V2\x121\n" +
 	"\x06normal\x18\r \x01(\x0e2\x13.message.NormalTypeB\x02\x18\x01H\x00R\x06normal\x127\n" +
 	"\n" +

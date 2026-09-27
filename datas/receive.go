@@ -8,6 +8,10 @@ import (
 	"github.com/XiaWuSharve/whisperly/config"
 )
 
+// receive frame:
+// | MessageType type = NORMAL 4b | reserved 4b | created time 8B | mess id 8B | sender id len 1B | receiver id len 1B |
+// | payload len 4B | sender id...| receiver id... | payload... |
+// | MessageType type = PULL 4b | reserved 4b | created time 8B | ack sequence 8B | pull count 4B | sender id len 1B | sender id... |
 type Receive struct {
 	Payload
 	Type        MessageType
