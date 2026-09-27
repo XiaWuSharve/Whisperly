@@ -18,7 +18,6 @@ import (
 	"github.com/XiaWuSharve/whisperly/network/conn"
 	"github.com/XiaWuSharve/whisperly/network/listener"
 	"github.com/XiaWuSharve/whisperly/persistence/repo"
-	"github.com/XiaWuSharve/whisperly/utils"
 	"github.com/bwmarrin/snowflake"
 	"github.com/gorilla/websocket"
 	"github.com/nsqio/go-nsq"
@@ -61,7 +60,8 @@ var startCmd = &cobra.Command{
 			// TODO store不可用时降级
 			panic(err)
 		}
-		var pool *conn.Pool = utils.NewShardMap[string, *conn.SendHandler](128, utils.HashFunc)
+		// TODO config
+		var pool *conn.Pool = conn.NewPool(128)
 		cfg := config.Server
 		protocol := cfg.Protocol
 		host := cfg.Host

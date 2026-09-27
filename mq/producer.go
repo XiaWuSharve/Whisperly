@@ -23,8 +23,7 @@ var _ ProducerInt = (*Producer)(nil)
 // 入队失败了该如何处理？绕过队列直接持久化？
 func (p *Producer) Enqueue(data datas.Encodable) (chan *nsq.ProducerTransaction, error) {
 	doneChan := make(chan *nsq.ProducerTransaction)
-	payload := data.ToByte()
-	if err := p.Producer.PublishAsync(p.Topic, payload.Bytes[payload.BodyStartIdx:], doneChan); err != nil {
+	if err := p.Producer.PublishAsync(p.Topic, datas.ToByte(data.ToPayload()), doneChan); err != nil {
 		return nil, fmt.Errorf("failed to publish message: %w", err)
 	}
 	return doneChan, nil
@@ -35,7 +34,10 @@ func (p *Producer) Close() {
 	p.Producer.Stop()
 }
 
-type ProducerMock[M datas.Encodable] struct {
+type ProducerMock[M interface {
+	datas.Encodable
+	datas.Decodable
+}] struct {
 	Consumer *ConsumerMock[M]
 }
 
@@ -51,4 +53,7 @@ func (p *ProducerMock[M]) Enqueue(data datas.Encodable) (chan *nsq.ProducerTrans
 	return ch, nil
 }
 
-var _ ProducerInt = (*ProducerMock[datas.Encodable])(nil)
+var _ ProducerInt = (*ProducerMock[interface {
+	datas.Encodable
+	datas.Decodable
+}])(nil)

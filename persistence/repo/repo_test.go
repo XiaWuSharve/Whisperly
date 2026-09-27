@@ -119,3 +119,7 @@ func TestTableStore(t *testing.T) {
 	}
 	cancel()
 }
+
+func TestHandler(t *testing.T) {
+	// TODO
+}

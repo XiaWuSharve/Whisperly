@@ -1,7 +1,6 @@
-package conn
+package router
 
 import (
-	"math"
 	"math/rand/v2"
 	"sync"
 	"testing"
@@ -14,13 +13,14 @@ import (
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
 func generateRandomString() string {
-    b := make([]byte, rand.IntN(255)+1)
-    for i := range b {
-        // 从字符集中随机选取一个字符
-        b[i] = charset[rand.IntN(len(charset))]
-    }
-    return string(b)
+	b := make([]byte, rand.IntN(255)+1)
+	for i := range b {
+		// 从字符集中随机选取一个字符
+		b[i] = charset[rand.IntN(len(charset))]
+	}
+	return string(b)
 }
 
 func initTest() {
@@ -65,7 +65,7 @@ func TestConsistence(t *testing.T) {
 	pool := &Pool{
 		SendHandlersByConnId: utils.NewShardMap[int64, *SendHandler](4, utils.HashFunc),
 		SendHandlersByUserId: utils.NewShardMap[string, *SendHandler](4, utils.HashFunc),
-		UserIdByConnId: utils.NewShardMap[int64, string](4, utils.HashFunc),
+		UserIdByConnId:       utils.NewShardMap[int64, string](4, utils.HashFunc),
 	}
 	wg := sync.WaitGroup{}
 	wg.Go(func() {
@@ -119,13 +119,13 @@ func TestConsistence(t *testing.T) {
 func TestPool(t *testing.T) {
 	initTest()
 	qps := 10000000
-	interval := time.Duration(float64(time.Second) / float64(qps))	
-		synctest.Test(t, func(t *testing.T) {
+	interval := time.Duration(float64(time.Second) / float64(qps))
+	synctest.Test(t, func(t *testing.T) {
 		for i := 0; i < qps*3; i++ {
 			op := rand.IntN(4)
-			go func ()  {
-				
-			}
+			go func() {
+
+			}()
 			time.Sleep(interval)
 		}
 		synctest.Wait()

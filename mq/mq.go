@@ -30,7 +30,7 @@ func (mq *Mq[T]) CreateConsumer(nsqLookupdAddress string) (*Consumer[T], error) 
 		return nil, fmt.Errorf("failed to create producer: %w", err)
 	}
 	return &Consumer[T]{
-		decoder:           mq.Decoder,
+		decodeData:        mq.Decoder,
 		consumer:          consumer,
 		NsqLookupdAddress: nsqLookupdAddress,
 	}, nil

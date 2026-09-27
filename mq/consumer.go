@@ -16,10 +16,9 @@ type ConsumerInt[M datas.Decodable] interface {
 
 type Consumer[MessType datas.Decodable] struct {
 	// 交给子类初始化
-	decoder           MessType
+	decodeData        MessType
 	consumer          *nsq.Consumer
 	NsqLookupdAddress string
-	MaxHeaderSize     int
 }
 
 var _ ConsumerInt[datas.Decodable] = (*Consumer[datas.Decodable])(nil)
@@ -32,17 +31,8 @@ var ErrRequeue = errors.New("require requeue")
 
 func (c *Consumer[M]) Start(handler Handler[M]) error {
 	h := func(message *nsq.Message) error {
-		bytes := make([]byte, c.MaxHeaderSize+len(message.Body))
-		copy(bytes[c.MaxHeaderSize:], message.Body)
-		err := c.decoder.Parse(&datas.Payload{
-			Bytes:        bytes,
-			BodyStartIdx: c.MaxHeaderSize,
-		})
-		if err != nil {
-			slog.Error("failed to parse during handling", "err", err)
-			return nil
-		}
-		if err := handler.Handle(c.decoder); err != nil {
+		c.decodeData.From(datas.FromByte(message.Body, 128))
+		if err := handler.Handle(c.decodeData); err != nil {
 			if errors.Is(err, ErrRequeue) {
 				return err
 			}
@@ -70,7 +60,7 @@ type ReceiveConsumer = Consumer[*datas.Receive]
 type SendConsumer = Consumer[*datas.Send]
 type StoreConsumer = Consumer[*datas.Store]
 
-type ConsumerMock[M any] struct {
+type ConsumerMock[M datas.Decodable] struct {
 	handler Handler[M]
 }
 

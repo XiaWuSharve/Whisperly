@@ -33,8 +33,7 @@ func (m *MyAdapter) Marshal(msg timeline.Message) (*timeline.ColumnMap, error) {
 		return nil, timeline.ErrUnexpected
 	}
 	col := timeline.NewColumnMap()
-	payload := store.ToByte()
-	col.AddBytesColumn(PAYLOAD, payload.Bytes[payload.BodyStartIdx:])
+	col.AddBytesColumn(PAYLOAD, datas.ToByte(store.ToPayload()))
 	return col, nil
 }
 
