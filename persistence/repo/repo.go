@@ -56,13 +56,8 @@ func (m *MyAdapter) Unmarshal(cols *timeline.ColumnMap) (timeline.Message, error
 	}
 	store := &datas.Store{}
 	body := v.([]byte)
-	// TODO 可能可以封装？
-	bytes := make([]byte, len(body)+m.MaxHeaderSize)
-	copy(bytes[m.MaxHeaderSize:], body)
-	store.Parse(&datas.Payload{
-		Bytes:        bytes,
-		BodyStartIdx: m.MaxHeaderSize,
-	})
+	// TODO
+	store.From(datas.FromByte(body, 128))
 
 	return store, nil
 }
@@ -120,10 +115,10 @@ func (st *SyncStore) Push(ctx context.Context, stores []*datas.Store) ([]error, 
 	return errs, nil
 }
 
-func (st *SyncStore) Pull(ctx context.Context, receiverId string, msgCount int) ([]*datas.Store, error) {
+func (st *SyncStore) Pull(ctx context.Context, receiverId string, msgCount int) ([]int64, []*datas.Store, error) {
 	tm, err := timeline.NewTmLine(receiverId, st.adapter, st.syncStore)
 	if err != nil {
-		return nil, fmt.Errorf("cannot create timeline: %w", err)
+		return nil, nil, fmt.Errorf("cannot create timeline: %w", err)
 	}
 	it := tm.Scan(&timeline.ScanParameter{
 		From:        math.MaxInt64,
@@ -133,6 +128,7 @@ func (st *SyncStore) Pull(ctx context.Context, receiverId string, msgCount int) 
 	})
 	defer it.Close()
 	stores := make([]*datas.Store, msgCount)
+	sequences := make([]int64, msgCount)
 	trueCount := 0
 	for i := range stores {
 		entry, err := it.Next()
@@ -140,18 +136,17 @@ func (st *SyncStore) Pull(ctx context.Context, receiverId string, msgCount int) 
 			if errors.Is(err, timeline.ErrorDone) {
 				break
 			}
-			return nil, fmt.Errorf("cannot scan timeline: %w", err)
+			return nil, nil, fmt.Errorf("cannot scan timeline: %w", err)
 		}
 		store, ok := entry.Message.(*datas.Store)
 		if !ok {
-			return nil, fmt.Errorf("unexpected message type: %T", entry.Message)
+			return nil, nil, fmt.Errorf("unexpected message type: %T", entry.Message)
 		}
-		store.ReceiverId = receiverId
-		store.Sequence = entry.Sequence
+		sequences[i] = entry.Sequence
 		stores[i] = store
 		trueCount++
 	}
-	return stores[:trueCount], nil
+	return sequences[:trueCount], stores[:trueCount], nil
 }
 
 func (st *SyncStore) Ack(ctx context.Context, receiverId string, minSequence int64) error {

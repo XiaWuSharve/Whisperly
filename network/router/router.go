@@ -18,7 +18,6 @@ type ShardRouter struct {
 	shards        []*ConcurrentRouter
 	SendConsumer  mq.ConsumerInt[*datas.Send]
 	StoreProducer mq.ProducerInt
-	store         datas.Store
 	hashFunc      func(k string) uint64
 	mask          uint64
 }
@@ -33,7 +32,7 @@ func (sm *ShardRouter) ChangeId(s string, d string) {
 
 type ConcurrentRouter struct {
 	rwMu sync.RWMutex
-	m    map[string]chan *datas.Send
+	m    map[string]chan datas.Send
 }
 
 func NewShardRouter(bucketMaxNum uint64, sendConsumer mq.ConsumerInt[*datas.Send], storeProducer mq.ProducerInt) *ShardRouter {
@@ -55,18 +54,18 @@ func NewShardRouter(bucketMaxNum uint64, sendConsumer mq.ConsumerInt[*datas.Send
 	}
 	for i := range sm.shards {
 		sm.shards[i] = &ConcurrentRouter{
-			m: make(map[string]chan *datas.Send),
+			m: make(map[string]chan datas.Send),
 		}
 	}
 
 	return sm
 }
 
-func (sm *ShardRouter) Send(k string, data *datas.Send) (bool, bool) {
+func (sm *ShardRouter) Send(k string, data datas.Send) (bool, bool) {
 	return sm.shards[sm.hashFunc(k)&sm.mask].Send(k, data)
 }
 
-func (sm *ShardRouter) Set(k string, v chan *datas.Send) {
+func (sm *ShardRouter) Set(k string, v chan datas.Send) {
 	sm.shards[sm.hashFunc(k)&sm.mask].Set(k, v)
 }
 
@@ -74,17 +73,17 @@ func (sm *ShardRouter) Delete(k string) {
 	sm.shards[sm.hashFunc(k)&sm.mask].Delete(k)
 }
 
-func (sm *ShardRouter) IsOffline(id string) (chan *datas.Send, bool) {
+func (sm *ShardRouter) IsOffline(id string) (chan datas.Send, bool) {
 	return sm.shards[sm.hashFunc(id)&sm.mask].IsOffline(id)
 }
 
-func (cr *ConcurrentRouter) IsOffline(id string) (chan *datas.Send, bool) {
+func (cr *ConcurrentRouter) IsOffline(id string) (chan datas.Send, bool) {
 	d, ok := cr.m[id]
 	return d, !ok
 }
 
 // returns: offline, full
-func (cr *ConcurrentRouter) Send(k string, data *datas.Send) (bool, bool) {
+func (cr *ConcurrentRouter) Send(k string, data datas.Send) (bool, bool) {
 	cr.rwMu.RLock()
 	defer cr.rwMu.RUnlock()
 	v, ok := cr.m[k]
@@ -99,7 +98,7 @@ func (cr *ConcurrentRouter) Send(k string, data *datas.Send) (bool, bool) {
 	return false, false
 }
 
-func (cr *ConcurrentRouter) Set(k string, v chan *datas.Send) {
+func (cr *ConcurrentRouter) Set(k string, v chan datas.Send) {
 	cr.rwMu.Lock()
 	defer cr.rwMu.Unlock()
 	cr.m[k] = v
@@ -127,10 +126,11 @@ func (r *ShardRouter) Start() error {
 
 func (r *ShardRouter) Handle(d *datas.Send) error {
 	slog.Debug("client sending frame")
-	offline, full := r.Send(d.ReceiverId, d)
+	offline, full := r.Send(d.ReceiverId, *d)
 	if offline {
-		r.store.FromSend(d)
-		if _, err := r.StoreProducer.Enqueue(&r.store); err != nil {
+		var store datas.Store
+		store.FromSend(d)
+		if _, err := r.StoreProducer.Enqueue(&store); err != nil {
 			return fmt.Errorf("cannot enqueue store producer: %w", err)
 		}
 		return nil

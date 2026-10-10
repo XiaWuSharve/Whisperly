@@ -25,10 +25,7 @@ func (h *handler) Handle(s *datas.Send) error {
 			h.T.Fatal("s.ReceiverId != sharve: ", s.ReceiverId)
 		}
 		if s.AckStatus != datas.AckStatus_SENT {
-			h.T.Fatal(s.AckStatus)
-		}
-		if s.MessageId != messId {
-			h.T.Fatal(s.MessageId)
+			h.T.Fatal(s.AckStatus.String())
 		}
 		if s.MessageId != messId {
 			h.T.Fatal(s.MessageId)
@@ -39,12 +36,6 @@ func (h *handler) Handle(s *datas.Send) error {
 		}
 		if s.ReceiverId != "processor" {
 			h.T.Fatal(s.ReceiverId)
-		}
-		if s.MessageId != messId {
-			h.T.Fatal(s.MessageId)
-		}
-		if s.MessageId != messId {
-			h.T.Fatal(s.MessageId)
 		}
 		if len(s.Payload.Bytes) == 0 {
 			h.T.Fatal("len(s.Payload) == 0")
@@ -65,14 +56,13 @@ func TestProcessor(t *testing.T) {
 	inputP := &mq.ProducerMock[*datas.Receive]{Consumer: inputC}
 	defer inputP.Close()
 	outputC := &mq.ConsumerMock[*datas.Send]{}
-	outputC.Start(&handler{T: t})
+	handler := &handler{T: t}
+	outputC.Start(handler)
 	defer outputC.Close()
 	outputP := &mq.ProducerMock[*datas.Send]{Consumer: outputC}
 	pc := &Processor{
 		SendProduer:     outputP,
 		ReceiveConsumer: inputC,
-		Receive2Message: &datas.Receive2MMessage{},
-		Message2Send:    &datas.MMessage2Send{},
 	}
 	inputC.Start(pc)
 	defer inputC.Close()

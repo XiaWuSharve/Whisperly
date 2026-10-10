@@ -25,6 +25,7 @@ type ReceiveHandler struct {
 	ProcessProducer mq.ProducerInt
 	receiveData     datas.Receive
 	storeData       datas.Store
+	sendData        datas.Send
 	Router          *router.ShardRouter
 	offline         bool
 	Err             error
@@ -33,7 +34,7 @@ type ReceiveHandler struct {
 type SendHandler struct {
 	Client
 	Err       error
-	SendChan  chan *datas.Send
+	SendChan  chan datas.Send
 	sendData  *datas.Send
 	storeData datas.Store
 }
@@ -55,7 +56,7 @@ func (s *SendHandler) close() {
 			slog.Error("failed to enqueue store mq", "err", err)
 		}
 	}
-	for s.sendData = range s.SendChan {
+	for *s.sendData = range s.SendChan {
 		s.storeData.FromSend(s.sendData)
 		_, err := s.StoreProducer.Enqueue(&s.storeData)
 		if err != nil {
@@ -66,7 +67,8 @@ func (s *SendHandler) close() {
 
 func (s *SendHandler) Start() error {
 	defer s.close()
-	for s.sendData = range s.SendChan {
+	s.sendData = &datas.Send{}
+	for *s.sendData = range s.SendChan {
 		// TODO 需要加一个ToByte接口（这个改为ToPayload）
 		if s.Err = s.Send(datas.ToByte(s.sendData.ToPayload())); s.Err != nil {
 			if errors.Is(s.Err, net.ErrClosed) {
@@ -100,7 +102,8 @@ func (r *ReceiveHandler) Start() error {
 				return r.Err
 			} else if errors.Is(r.Err, datas.ErrTimeLargeOffset) {
 				// send fail ACK
-				r.ackFail(fmt.Sprintf("请校对时钟：%s", r.Err))
+				r.sendData.FromAck(datas.AckStatus_FAIL, r.receiveData.MessageId, "请校对时钟："+r.Err.Error())
+				r.SendHandler.SendChan <- r.sendData
 				slog.Error(r.Err.Error())
 				continue
 			} else {
@@ -134,25 +137,9 @@ func (r *ReceiveHandler) Start() error {
 	}
 }
 
-// receiver 发送给 sender 的数据结构体一律不能复用（原地修改）
-// TODO datas.Send.FromAck(status, messId, reason)
-func (r *ReceiveHandler) ackFail(reason string) {
-	// TODO reason bit
-	f := &datas.Send{
-		Payload: datas.Payload{
-			Bytes:        make([]byte, 13),
-			BodyStartIdx: 13,
-		},
-		Type:      datas.MessageType_ACK,
-		AckStatus: datas.AckStatus_FAIL,
-		MessageId: r.receiveData.MessageId,
-	}
-	r.SendHandler.SendChan <- f
-}
-
 func (r *ReceiveHandler) ackSending() {
 	// TODO reason bit
-	f := &datas.Send{
+	f := datas.Send{
 		Payload: datas.Payload{
 			Bytes:        make([]byte, 13),
 			BodyStartIdx: 13,
@@ -168,7 +155,8 @@ func (r *ReceiveHandler) toStore() {
 	r.storeData.FromReceive(&r.receiveData)
 	_, r.Err = r.StoreProducer.Enqueue(&r.storeData)
 	if r.Err != nil {
-		r.ackFail(fmt.Sprintf("无法暂存数据：%s", r.Err))
+		r.sendData.FromAck(datas.AckStatus_FAIL, r.receiveData.MessageId, "无法暂存数据："+r.Err.Error())
+		r.SendHandler.SendChan <- r.sendData
 		return
 	}
 }

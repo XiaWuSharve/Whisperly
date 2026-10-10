@@ -19,6 +19,9 @@ func (h *TestHandler) Handle(m *datas.MMessage) error {
 		h.SuccessCount++
 	}()
 	// 基本字段检查
+	if m.Message.MessageId == 0 {
+		h.T.Fatal("m.Message.MessageId: ", m.Message.MessageId)
+	}
 	if m.Message.SenderId != "sharve" {
 		h.T.Fatal("m.Message.SenderId: ", m.Message.SenderId)
 	}
@@ -90,6 +93,7 @@ func TestMq(t *testing.T) {
 		SenderId:    "sharve",
 		ReceiverId:  "glacc",
 		CreatedTime: time.Now().UnixMilli(),
+		MessageId:   datas.GenId(),
 		Data: &datas.Message_Chat{
 			Chat: &datas.Chat{
 				DisplayName: "夏午",
