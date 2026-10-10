@@ -23,7 +23,7 @@ type Consumer[MessType datas.Decodable] struct {
 
 var _ ConsumerInt[datas.Decodable] = (*Consumer[datas.Decodable])(nil)
 
-type Handler[MessType any] interface {
+type Handler[MessType datas.Decodable] interface {
 	Handle(message MessType) error
 }
 
@@ -32,6 +32,7 @@ var ErrRequeue = errors.New("require requeue")
 func (c *Consumer[M]) Start(handler Handler[M]) error {
 	h := func(message *nsq.Message) error {
 		c.decodeData.From(datas.FromByte(message.Body, 128))
+		// BUG 如果缓存c.decodeData指针就会共享内存
 		if err := handler.Handle(c.decodeData); err != nil {
 			if errors.Is(err, ErrRequeue) {
 				return err

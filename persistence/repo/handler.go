@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/XiaWuSharve/whisperly/datas"
@@ -17,18 +18,12 @@ type Handler struct {
 
 // Handle implements [mq.Handler].
 func (h *Handler) Handle(message *datas.Store) error {
-	if message.SendType {
-		sendData := &datas.Send{}
-		sendData.FromStore(message)
-		if _, err := h.SendProducer.Enqueue(sendData); err != nil {
-			return fmt.Errorf("cannot enqueue send producer: %w", err)
-		}
+	if message.Type == datas.MessageType_PULL {
+		h.Ack(context.Background(), message.ReceiverId, message.AckSequence)
+		h.Pull(context.Background(), message.ReceiverId, int(message.PullCount))
 	} else {
-		receiveData := &datas.Receive{}
-		receiveData.FromStore(message)
-		if _, err := h.ReceiveProducer.Enqueue(receiveData); err != nil {
-			return fmt.Errorf("cannot enqueue receive producer: %w", err)
-		}
+		// TODO 批量刷写
+		h.Push(context.Background(), []*datas.Store{message})
 	}
 	return nil
 }
